@@ -1,6 +1,4 @@
 // ========== SquadClarity Loader (SC) v1.0 ==========
-// Event Tracking + Identity Stitching (UNCHANGED)
-// + Shadow Submissions (ADD-ON ONLY)
 
 (function () {
   const script = document.currentScript;
@@ -15,3 +13,4 @@
 
   document.head.appendChild(sc);
 })();
+
