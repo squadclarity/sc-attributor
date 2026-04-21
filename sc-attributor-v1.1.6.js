@@ -631,6 +631,40 @@ function inferFieldFromElement(el) {
     };
   }
 
+  function getOrCreateAttemptKey(form) {
+    if (form && form.__sc_attempt_key) return form.__sc_attempt_key;
+
+    const key = `${sessionId}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+
+    if (form) {
+      form.__sc_attempt_key = key;
+    }
+
+    window.__sc_last_attempt_key = key;
+    return key;
+  }
+
+  function getLatestAttemptKey() {
+    return window.__sc_last_attempt_key || null;
+  }
+
+  function setLatestAttemptKey(key) {
+    if (key) window.__sc_last_attempt_key = key;
+  }
+
+  function getCompletenessScore({ email, first_name, last_name, message, fields }) {
+    let score = 0;
+
+    if (email) score += 5;
+    if (first_name) score += 2;
+    if (last_name) score += 2;
+    if (message && String(message).trim()) score += 3;
+
+    score += Math.min((fields || []).length, 10);
+
+    return score;
+  }
+
   function scanForSubmissionSuccess(root = document) {
     const successSelectors = [
       ".gform_confirmation_message",
@@ -674,6 +708,7 @@ function inferFieldFromElement(el) {
   // SHADOW SUBMISSION SNAPSHOT
   // -------------------------------------------------------
   async function sendShadowSubmission({
+    attemptKey = null,
     message,
     formId,
     formName,
@@ -695,6 +730,15 @@ function inferFieldFromElement(el) {
 
       visitor_id: visitorId,
       session_id: sessionId,
+
+      attempt_key: attemptKey,
+      completeness_score: getCompletenessScore({
+        email: identity.email,
+        first_name: identity.first_name,
+        last_name: identity.last_name,
+        message,
+        fields
+      }),
 
       email: identity.email,
       first_name: identity.first_name,
@@ -1052,12 +1096,18 @@ function inferFieldFromElement(el) {
       scSubmitIntentDetected = true;
 
       const formMeta = getFormMeta(form);
+      const attemptKey =
+        (form && form.__sc_formdata_snapshot && form.__sc_formdata_snapshot.attemptKey) ||
+        getOrCreateAttemptKey(form);
+      setLatestAttemptKey(attemptKey);
+
       if (scShadowSentForms.has(formMeta.formKey)) return;
       scShadowSentForms.add(formMeta.formKey);
 
       const snapshot = form && form.__sc_formdata_snapshot ? form.__sc_formdata_snapshot : collectFormFields(form);
 
       sendShadowSubmission({
+        attemptKey,
         message: snapshot.bestMessage || scShadowMessage || null,
         formId: formMeta.formId,
         formName: formMeta.formName,
@@ -1080,6 +1130,10 @@ function inferFieldFromElement(el) {
 
       const form = btn.form || null;
       const formMeta = getFormMeta(form);
+      const attemptKey =
+        (form && form.__sc_formdata_snapshot && form.__sc_formdata_snapshot.attemptKey) ||
+        getOrCreateAttemptKey(form);
+      setLatestAttemptKey(attemptKey);
 
       scSubmitIntentDetected = true;
 
@@ -1089,6 +1143,7 @@ function inferFieldFromElement(el) {
       const snapshot = form && form.__sc_formdata_snapshot ? form.__sc_formdata_snapshot : collectFormFields(form);
 
       sendShadowSubmission({
+        attemptKey,
         message: snapshot.bestMessage || scShadowMessage || null,
         formId: formMeta.formId,
         formName: formMeta.formName,
@@ -1107,11 +1162,21 @@ function inferFieldFromElement(el) {
   window.addEventListener("beforeunload", () => {
     if (!scSubmitIntentDetected) return;
 
+    const attemptKey = getLatestAttemptKey();
+
     const beaconPayload = {
       client: CLIENT_ID,
       client_id: SC_CLIENT_UUID,
       visitor_id: visitorId,
       session_id: sessionId,
+      attempt_key: attemptKey,
+      completeness_score: getCompletenessScore({
+        email: identity.email,
+        first_name: identity.first_name,
+        last_name: identity.last_name,
+        message: scShadowMessage || null,
+        fields: []
+      }),
       email: identity.email,
       first_name: identity.first_name,
       last_name: identity.last_name,
@@ -1137,6 +1202,9 @@ function inferFieldFromElement(el) {
       try {
         const form = e.target;
         if (!form || form.tagName !== "FORM") return;
+
+        const attemptKey = getOrCreateAttemptKey(form);
+        setLatestAttemptKey(attemptKey);
 
         const formMeta = getFormMeta(form);
         if (scShadowSentForms.has(formMeta.formKey)) return;
@@ -1175,6 +1243,7 @@ function inferFieldFromElement(el) {
         });
 
         form.__sc_formdata_snapshot = {
+          attemptKey,
           fields,
           bestMessage: bestMessage || fields.map((f) => `${f.label}: ${f.value}`).join(" | ")
         };
