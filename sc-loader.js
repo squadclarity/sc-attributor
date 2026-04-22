@@ -7,7 +7,7 @@
   if (!client) return;
 
   const sc = document.createElement("script");
-  sc.src = "https://cdn.jsdelivr.net/gh/squadclarity/sc-attributor@v1.1.6/sc-attributor-v1.1.6.js";
+  sc.src = "https://cdn.jsdelivr.net/gh/squadclarity/sc-attributor@v1.1.7/sc-attributor-v1.1.7.js";
   sc.defer = true;
   sc.setAttribute("data-sc-client", client);
 
